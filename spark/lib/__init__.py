@@ -14,6 +14,6 @@ def perror(message: str, exception: OSError, code: int = 0) -> None:
     supply any error code and the function will exit with it."""
     errno: int = exception.errno
     errno_message: str = os.strerror(errno)
-    sys.stderr.write("spark: " + message + ": " + errno_message)
+    sys.stderr.write("spark: " + message + ": " + errno_message + '\n')
     if code != 0:
         sys.exit(code)

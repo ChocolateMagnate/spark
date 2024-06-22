@@ -5,6 +5,7 @@ import sys
 import tomllib
 
 import codes
+from project import init_new_project
 from lib import perror
 
 SPARK_MINIMAL_PYTHON_VERSION = "3.10.0"
@@ -26,9 +27,10 @@ def main(argv: list[str]) -> None:
         sys.exit(codes.EXIT_UNSUPPORTED_PYTHON_VERSION)
 
     parser = argparse.ArgumentParser(prog="spark", description="A declarative build system for C and C++ projects")
-    parser.add_argument("--new", dest="title", type=bool, help="Specifies the name of new Spark project to create.")
-
+    parser.add_argument("--new", dest="title", type=str, help="Specifies the name of new Spark project to create.")
     args = parser.parse_args(argv)
+    if args.title:
+        init_new_project(args.title)
 
     spark_build_declaration: dict = load_sparkfile()
 
