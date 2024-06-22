@@ -1,0 +1,12 @@
+[tool.poetry]
+name = "spark"
+version = "0.1.0-rc"
+license = "Apache License 2"
+description = "A declarative build system for C and C++ projects"
+authors = ["Vladyslav Korol <chocolate-magnate@protonmail.com>"]
+
+[tool.poetry.dependencies]
+python = "^3.10"
+
+[tool.poetry.dev-dependencies]
+pytest = "^8.2.2"
