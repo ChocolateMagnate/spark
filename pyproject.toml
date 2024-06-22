@@ -9,6 +9,8 @@ authors = ["Vladyslav Korol <chocolate-magnate@protonmail.com>"]
 python = "^3.10"
 toml = "^0.10.2"
 gitpython = "^3.1.43"
+aiofiles = "^23.2.1"
+cryptography = "^42.0.8"
 
 [tool.poetry.dev-dependencies]
 pytest = "^8.2.2"
