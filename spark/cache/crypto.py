@@ -1,4 +1,3 @@
-import base64
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.backends import default_backend
@@ -8,7 +7,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey
 from cryptography.hazmat.primitives.serialization import load_pem_public_key
 
-from ..destinations import get_public_cache_key_path
+from spark.destinations import get_public_cache_key_path
 
 
 def generate_key_pair() -> tuple[bytes, RSAPrivateKey]:
@@ -19,15 +18,40 @@ def generate_key_pair() -> tuple[bytes, RSAPrivateKey]:
         key_size=4096,
         backend=default_backend(),
     )
-    public_key_bytes = private_key.private_bytes(
+    public_key_bytes = private_key.public_key().public_bytes(
         encoding=serialization.Encoding.PEM,
-        format=serialization.PrivateFormat.TraditionalOpenSSL,
-        encryption_algorithm=serialization.NoEncryption(),
+        format=serialization.PublicFormat.SubjectPublicKeyInfo,
     )
     with open(get_public_cache_key_path(), 'wb') as public_key_file:
         public_key_file.write(public_key_bytes)
 
     return public_key_bytes, private_key
+
+
+def stringify_private_key(private_key: RSAPrivateKey) -> str:
+    """Converts an RSA private key into a PEM-encoded string. It's suitable to be
+       stored within secure keychains and can be converted back using parse_private_key_string().
+       :param private_key The RSAPrivateKey object to stringify.
+       :return The PEM string for the private key."""
+    return private_key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.NoEncryption()
+    ).decode()
+
+
+def parse_private_key_string(private_key_pem: str) -> RSAPrivateKey:
+    """Converts the given private key as a string into a proper RSAPrivateKey object.
+       This function arises when storing the private key in a keyring where it must be
+       serialised back and on. Thankfully, the private key string contains enough information
+       to construct it into an RSAPrivateKey object.
+       :param private_key_pem The string containing the private key.
+       :return The functioning PRSAPrivateKey object initialised from the string."""
+    return serialization.load_pem_private_key(
+        private_key_pem.encode(),
+        password=None,
+        backend=default_backend()
+    )
 
 
 def sign(payload: bytes, private_key: RSAPrivateKey) -> bytes:
@@ -43,15 +67,13 @@ def sign(payload: bytes, private_key: RSAPrivateKey) -> bytes:
     :param private_key The private key to sign the data with.
     :return The signature as bytes. It should be stored alongside the main payload to be able to verify authenticity.
     """
-    return base64.b64encode(
-        private_key.sign(
-            payload,
-            padding.PSS(
-                mgf=padding.MGF1(hashes.SHA256()),
-                salt_length=padding.PSS.MAX_LENGTH,
-            ),
-            hashes.SHA256(),
-        )
+    return private_key.sign(
+        payload,
+        padding.PSS(
+            mgf=padding.MGF1(hashes.SHA256()),
+            salt_length=padding.PSS.MAX_LENGTH,
+        ),
+        hashes.SHA256(),
     )
 
 
@@ -63,7 +85,6 @@ def verify(payload: bytes, signature: bytes, public_key: bytes) -> bool:
     with the private key and be generated as a single pair for verification to be successful.
     :return True if signature is valid and False otherwise."""
     try:
-        signature = base64.b64decode(signature)
         public_key = load_pem_public_key(public_key, default_backend())
         public_key.verify(
             signature, payload,

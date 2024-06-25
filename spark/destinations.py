@@ -1,5 +1,7 @@
 import os
 import sys
+import getpass
+import hashlib
 from pathlib import Path
 
 
@@ -15,16 +17,19 @@ def get_public_cache_key_path() -> Path:
 
 
 def get_temporary_cache_path() -> Path:
-    USER: str = os.environ["USER"]
+    cache_path = Path()
+    project_file_hash: str = hashlib.sha512(os.getcwd().encode()).hexdigest()
+    USER: str = getpass.getuser()
     if sys.platform.startswith("linux"):
-        return Path(f"/tmp/spark.{USER}.cache")
+        cache_path = Path(f"/tmp/spark.{USER}.cache")
     elif sys.platform.startswith("darwin"):
         # While macOS also has /tmp, the $TMPDIR is more preferred destination to place temporary files.
         TMPDIR: str = os.environ["TMPDIR"]
-        return Path(f"{TMPDIR}/spark.{USER}.cache")
+        cache_path = Path(f"{TMPDIR}/spark.{USER}.cache")
     elif sys.platform.startswith("win"):
         TEMP: str = os.environ["TEMP"]
-        return Path(f"{TEMP}/spark.{USER}.cache")
+        cache_path = Path(f"{TEMP}/spark.{USER}.cache")
+    return cache_path / project_file_hash
 
 
 def get_user_preferences_file_path() -> Path:
