@@ -8,31 +8,16 @@ from typing import Self, Any
 
 import keyring as kr
 
+from spark import SPARK_BUILD_DECLARATION_FILES
 from spark import codes
 from spark import destinations
 from spark.cache import crypto
 from spark.destinations import get_temporary_cache_path, get_public_cache_key_path
 
-# We currently use the RSA 4018-bit key, which generates a 512-byte hash.
-SIGNATURE_SIZE_BYTES: int = 512
-
 # The cache files can only be accessed by the owner. The permission mask includes the execute bit
 # because various Unix-based filesystems require the user to have the execute permission to create
 # new files in it. For more details, refer to https://askubuntu.com/a/1244013.
 OWNER_READ_AND_WRITE_ONLY_PERMISSION_MASK: int = 0o700
-
-
-def load_public_key() -> bytes:
-    """Loads an existing public key or generates a new one if it doesn't exist."""
-    public_key_path: Path = get_public_cache_key_path()
-    if not public_key_path.exists():
-        public_key_bytes, _ = crypto.generate_key_pair()
-        with open(get_public_cache_key_path(), "wb") as public_key_file:
-            public_key_file.write(public_key_bytes)
-    else:
-        with open(get_public_cache_key_path(), "rb") as public_key_file:
-            public_key_bytes = public_key_file.read()
-    return public_key_bytes
 
 
 class SparkCacheFile:
@@ -58,6 +43,7 @@ class SparkCacheFile:
         self.signature = b''
         self.public_key_bytes = b''
         self.username: str = getpass.getuser()
+        self.service = f"spark.{self.username}.cache"
         self.path: Path = get_temporary_cache_path()
         self.opened: bool = False
 
@@ -67,13 +53,25 @@ class SparkCacheFile:
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
 
+    def __load_public_key(self) -> bytes:
+        """Loads an existing public key or generates a new one if it doesn't exist."""
+        public_key_path: Path = get_public_cache_key_path()
+        if not public_key_path.exists():
+            public_key_bytes, private_key = crypto.generate_key_pair()
+            kr.set_password(self.service, self.username, crypto.stringify_private_key(private_key))
+            with open(get_public_cache_key_path(), "wb") as public_key_file:
+                public_key_file.write(public_key_bytes)
+        else:
+            with open(get_public_cache_key_path(), "rb") as public_key_file:
+                public_key_bytes = public_key_file.read()
+        return public_key_bytes
+
     def sync(self) -> None:
         """Writes the cache file back on the filesystem."""
-        private_key_pem: str = kr.get_password(f"spark.{self.username}.cache", self.username)
+        private_key_pem: str = kr.get_password(self.service, self.username)
         if private_key_pem is None:
             public_key_bytes, private_key = crypto.generate_key_pair()
-            kr.set_password(f"spark.{self.username}.cache",
-                            self.username, crypto.stringify_private_key(private_key))
+            kr.set_password(self.service, self.username, crypto.stringify_private_key(private_key))
             with open(get_public_cache_key_path(), "wb") as public_key_file:
                 public_key_file.write(public_key_bytes)
         else:
@@ -87,15 +85,11 @@ class SparkCacheFile:
         """Reloads the cache by reading the build files normally and generating the cache for them.
            This is often the need if the cache file doesn't exit yet or was deleted. Upon completion
            of this operation, the cache file is up and ready to be read."""
-        Spark = Path("Spark.toml")
-        patch = Path("spark.patch.toml")
-        preferences: Path = destinations.get_user_preferences_file_path()
-        environment: Path = destinations.get_environment_file_path()
-        if not Spark.exists():
+        if not Path("Spark.toml").exists():
             sys.stderr.write("spark: can't open Spark.toml: No such file or directory")
             sys.exit(codes.EXIT_SPARKFILE_UNAVAILABLE)
         build = dict()
-        for declaration in [environment, preferences, patch, Spark]:
+        for declaration in SPARK_BUILD_DECLARATION_FILES:
             if not declaration.exists():
                 continue
             with open(declaration, "r") as declaration_file:
@@ -107,16 +101,24 @@ class SparkCacheFile:
 
     def open(self) -> Self:
         self.opened = True
-        self.public_key_bytes = load_public_key()
+        self.public_key_bytes = self.__load_public_key()
         if not self.path.exists():
             os.makedirs(self.path.parent, OWNER_READ_AND_WRITE_ONLY_PERMISSION_MASK, True)
             self.regenerate()
+            return self
         if self.clear:
             return self
+        cache_file_modification_timestamp = os.path.getmtime(destinations.get_temporary_cache_path())
+        for declaration in SPARK_BUILD_DECLARATION_FILES:
+            if not declaration.exists():
+                continue
+            if os.path.getmtime(declaration) > cache_file_modification_timestamp:
+                self.regenerate()
+                return self
         with open(self.path, "rb") as cache:
             contents = cache.read()
-            self.signature = contents[:SIGNATURE_SIZE_BYTES]
-            self.cache = contents[SIGNATURE_SIZE_BYTES:]
+            self.signature = contents[:crypto.SIGNATURE_SIZE_BYTES]
+            self.cache = contents[crypto.SIGNATURE_SIZE_BYTES:]
             if not crypto.verify(self.cache, self.signature, self.public_key_bytes):
                 self.regenerate()
         return self
@@ -146,7 +148,7 @@ class SparkCacheFile:
         self.cache = pickle.dumps(data)
 
     def append(self, data) -> int:
-        """Appends the provided data to the cache. Normally, the cache file is treated as a single whole and
+        """Appends the provided data to the cache. Normally, the cache file is treated as a single whole, and
            it's written to and read as a single coherent unit, but append() shall add the provided data to
            the existing cache as it is. When doing so, the caller will need to make sure you read the cache
            properly because de-pickling the whole cache file with default read() will become dangerous, but

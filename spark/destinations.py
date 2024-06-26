@@ -17,19 +17,18 @@ def get_public_cache_key_path() -> Path:
 
 
 def get_temporary_cache_path() -> Path:
-    cache_path = Path()
-    project_file_hash: str = hashlib.sha512(os.getcwd().encode()).hexdigest()
+    f"""Retrieves the path to the current cache file. Spark indexes different projects as absolute
+       paths from the current working directory and constructs a hash for them stored in the 
+       spark.USER.cache directory."""
+    TMP: str = "/tmp"
     USER: str = getpass.getuser()
-    if sys.platform.startswith("linux"):
-        cache_path = Path(f"/tmp/spark.{USER}.cache")
-    elif sys.platform.startswith("darwin"):
+    project_file_hash: str = hashlib.sha512(os.getcwd().encode()).hexdigest()
+    if sys.platform.startswith("darwin"):
         # While macOS also has /tmp, the $TMPDIR is more preferred destination to place temporary files.
-        TMPDIR: str = os.environ["TMPDIR"]
-        cache_path = Path(f"{TMPDIR}/spark.{USER}.cache")
+        TMP = os.environ["TMPDIR"]
     elif sys.platform.startswith("win"):
-        TEMP: str = os.environ["TEMP"]
-        cache_path = Path(f"{TEMP}/spark.{USER}.cache")
-    return cache_path / project_file_hash
+        TMP = os.environ["TEMP"]
+    return Path(TMP) / f"spark.{USER}.cache" / project_file_hash
 
 
 def get_user_preferences_file_path() -> Path:

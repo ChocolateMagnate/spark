@@ -1,5 +1,5 @@
 [package]
-name = "spark"
+name = "Spark++"
 version = "0.1.0-rc"
 license = "Apache License 2"
 description = "A declarative build system for C and C++ projects"

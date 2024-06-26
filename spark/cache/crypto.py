@@ -9,13 +9,16 @@ from cryptography.hazmat.primitives.serialization import load_pem_public_key
 
 from spark.destinations import get_public_cache_key_path
 
+# We currently use the RSA 4018-bit key, which generates a 512-byte hash.
+SIGNATURE_SIZE_BYTES: int = 512
+
 
 def generate_key_pair() -> tuple[bytes, RSAPrivateKey]:
     """Generates a pair of public and private cryptographic keys to be used to sign cache file.
     :return A tuple of bytes where the first element is the public key and the second one is private key."""
     private_key = rsa.generate_private_key(
         public_exponent=65537,
-        key_size=4096,
+        key_size=SIGNATURE_SIZE_BYTES * 8,  # RSA takes the key size in bits.
         backend=default_backend(),
     )
     public_key_bytes = private_key.public_key().public_bytes(
