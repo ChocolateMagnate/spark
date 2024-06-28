@@ -99,6 +99,25 @@ class SparkCacheFile:
         self.opened = True
         self.sync()  # We sync because we often expect an existing cache file to be available.
 
+    def __regenerate_cache_if_outdated(self) -> None:
+        """If any of the build files were changed since the last cache was updated, we regenerate it here."""
+        cache_file_modification_timestamp = os.path.getmtime(destinations.get_temporary_cache_path())
+        for declaration in SPARK_BUILD_DECLARATION_FILES:
+            if not declaration.exists():
+                continue
+            if os.path.getmtime(declaration) > cache_file_modification_timestamp:
+                self.regenerate()
+
+    def __regenerate_if_cache_is_tampered(self) -> None:
+        """In case if the cache file was modified by a third party, we will verify whether
+           the signature matches the content and reject the existing cache file but regenerate it."""
+        with open(self.path, "rb") as cache:
+            contents = cache.read()
+            self.signature = contents[:crypto.SIGNATURE_SIZE_BYTES]
+            self.cache = contents[crypto.SIGNATURE_SIZE_BYTES:]
+            if not crypto.verify(self.cache, self.signature, self.public_key_bytes):
+                self.regenerate()
+
     def open(self) -> Self:
         self.opened = True
         self.public_key_bytes = self.__load_public_key()
@@ -108,19 +127,8 @@ class SparkCacheFile:
             return self
         if self.clear:
             return self
-        cache_file_modification_timestamp = os.path.getmtime(destinations.get_temporary_cache_path())
-        for declaration in SPARK_BUILD_DECLARATION_FILES:
-            if not declaration.exists():
-                continue
-            if os.path.getmtime(declaration) > cache_file_modification_timestamp:
-                self.regenerate()
-                return self
-        with open(self.path, "rb") as cache:
-            contents = cache.read()
-            self.signature = contents[:crypto.SIGNATURE_SIZE_BYTES]
-            self.cache = contents[crypto.SIGNATURE_SIZE_BYTES:]
-            if not crypto.verify(self.cache, self.signature, self.public_key_bytes):
-                self.regenerate()
+        self.__regenerate_cache_if_outdated()
+        self.__regenerate_if_cache_is_tampered()
         return self
 
     def close(self):
@@ -167,8 +175,8 @@ class SparkCacheFile:
         :param offset (optional) The byte offset from where to start de-pickling.
         :return De-pickled data from the cache file."""
         if not self.opened:
-            raise FileNotFoundError(f"A file was tried to be read from {self.path.name} but it was not open! "
-                                    f"Use the context manager: with SparkCacheFile() as cache")
+            raise TypeError(f"A file was tried to be read from {self.path.name} but it was not open! "
+                            f"Use the context manager: with SparkCacheFile() as cache")
         if not self.path.exists():
             self.regenerate()
         if self.is_cached() and size is not None:

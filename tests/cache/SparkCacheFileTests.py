@@ -20,6 +20,12 @@ def delete_cache_if_exists():
         os.remove(CACHE_PATH)
 
 
+def test_not_opened_file():
+    with pytest.raises(TypeError) as mock:
+        cache = SparkCacheFile()
+        contents = cache.read()
+
+
 def test_regenerate_cache():
     delete_cache_if_exists()
     with SparkCacheFile() as cache:
@@ -90,17 +96,6 @@ def test_sync_regenerates_key_pair_if_does_not_exist():
     assert public_key != regenerated_public_key
 
 
-def test_regenerate_fails_without_spark_toml():
-    Spark = Path("Spark.toml")
-    os.makedirs(".tmp", exist_ok=True)
-    Spark.rename(".tmp/Spark.toml")
-    with pytest.raises(SystemExit) as mock_exit:
-        with SparkCacheFile() as cache:
-            pass
-    assert mock_exit.value.code == codes.EXIT_SPARKFILE_UNAVAILABLE
-    Path(".tmp/Spark.toml").rename("Spark.toml")
-
-
 def test_regenerates_successfully():
     with open("Spark.toml", "r+") as sparkfile:
         contents = tomllib.loads(sparkfile.read())
@@ -134,3 +129,18 @@ def test_is_cached_after_sync():
     with SparkCacheFile() as cache:
         cache_status = cache.is_cached()
         assert cache_status
+
+
+# Note: this test is placed the last one because it manipulates the local Spark.toml file
+# at the current directory. It's somewhat annoying when a number of tests fail just because
+# it failed and didn't move it from the .tmp directory, that's why we run it the last.
+def test_regenerate_fails_without_spark_toml():
+    delete_cache_if_exists()
+    Spark = Path("Spark.toml")
+    os.makedirs(".tmp", exist_ok=True)
+    Spark = Spark.rename(".tmp/Spark.toml")
+    with pytest.raises(SystemExit) as mock_exit:
+        with SparkCacheFile() as cache:
+            pass
+    assert mock_exit.value.code == codes.EXIT_SPARKFILE_UNAVAILABLE
+    Spark.rename("Spark.toml")
