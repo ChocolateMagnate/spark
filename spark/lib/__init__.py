@@ -1,6 +1,8 @@
 import os
 import sys
 
+import installers
+
 
 def perror(message: str, exception: OSError, code: int = 0) -> None:
     """Pythonic analogue of the C perror(3) function. It provides a simple way to print error

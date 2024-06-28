@@ -1,0 +1,21 @@
+[package]
+name = "Spark++"
+version = "0.1.0-rc"
+license = "Apache License 2"
+description = "A declarative build system for C and C++ projects"
+authors = [ "Vladyslav Korol <chocolate-magnate@protonmail.com>",]
+
+[spark]
+output = "out/bin/spark"
+sources = "src/**"
+lto = "thin"
+strip = "all-unneeded"
+dependencies = [ "fmt", "Eigen",]
+disable = [ "exceptions", "rti",]
+
+[dependencies.default]
+fmt = "10.2.1"
+
+[dependencies.default.Eigen]
+version = "3.2.4"
+macro = "EIGEN"
