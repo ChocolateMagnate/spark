@@ -3,6 +3,7 @@ import sys
 import getpass
 import hashlib
 from pathlib import Path
+from datetime import datetime
 
 
 def get_temporary_directory() -> Path:
@@ -59,3 +60,22 @@ def get_environment_file_path() -> Path:
         return Path("/Library/Preferences/spark.environment.toml")
     elif sys.platform.startswith("win"):
         return Path("C:\\ProgramData\\spark.environment.toml")
+
+
+def get_build_logging_path() -> Path:
+    """Retrieves the path to the build log file where to log the build process.
+       Spark logs all files to the user-specific spark.$USER.build directory inside each
+       there is a separate directory per day and hour when built occurred, as well as the
+       project name. This distinction helps to avoid polluting filenames, give additional
+       information to users when the build started and is granular enough to avoid collisions.
+       :return The path to the log file."""
+    parts = Path(os.getcwd()).parts
+    parent = parts[len(parts) - 1]
+    HOME: str = os.path.expanduser("~")
+    day, hour = datetime.now().strftime("%d.%m.%Y %H:%M").split()
+    base_path = Path(HOME) / ".local" / "share" / "spark"
+    if sys.platform.startswith("win"):
+        base_path = Path(HOME) / "Library" / "Logs" / "spark"
+    elif sys.platform.startswith("darwin"):
+        base_path = Path(HOME) / "AppData" / "Local" / "spark" / "Logs"
+    return base_path / day / hour / f"{parent}.log"

@@ -1,5 +1,11 @@
-import psutil
+import os.path
+import subprocess
 
+
+import psutil
+import pytest
+
+from spark.destinations import get_build_logging_path
 from spark.builder import BuildProcessExecutor
 
 
@@ -60,3 +66,29 @@ def test_implicit_build_start():
     current, total = executor.progress()
     assert current == total
     assert executor.is_work_complete()
+
+
+def test_loging():
+    with BuildProcessExecutor(3) as executor:
+        for command in [["ping", "-c", "3", "www.cloudflare.com"]] * 3:
+            executor.submit(command)
+    with open(get_build_logging_path(), "r") as logfile:
+        log_contents = logfile.read()
+        assert log_contents == ("[1/3] ping -c 3 www.cloudflare.com\n"
+                                "[2/3] ping -c 3 www.cloudflare.com\n"
+                                "[3/3] ping -c 3 www.cloudflare.com\n")
+
+
+def test_stdout_redirection():
+    redirected_content = "This text goes to the log file."
+    normal_content = "This text should instead be printed to terminal."
+    logfile_path = get_build_logging_path()
+    with BuildProcessExecutor(1) as executor:
+        print(redirected_content)
+        subprocess.run("tree", shell=True)
+    print(normal_content)
+    with open(logfile_path, "r") as logfile:
+        redirected_content_length = len(redirected_content)
+        head = logfile.read(redirected_content_length)
+        assert head == redirected_content
+        assert os.path.getsize(logfile_path) > redirected_content_length
