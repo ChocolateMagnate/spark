@@ -75,7 +75,7 @@ def get_build_logging_path() -> Path:
     day, hour = datetime.now().strftime("%d.%m.%Y %H:%M").split()
     base_path = Path(HOME) / ".local" / "share" / "spark"
     if sys.platform.startswith("win"):
-        base_path = Path(HOME) / "Library" / "Logs" / "spark"
-    elif sys.platform.startswith("darwin"):
         base_path = Path(HOME) / "AppData" / "Local" / "spark" / "Logs"
+    elif sys.platform.startswith("darwin"):
+        base_path = Path(HOME) / "Library" / "Logs" / "spark"
     return base_path / day / hour / f"{parent}.log"
