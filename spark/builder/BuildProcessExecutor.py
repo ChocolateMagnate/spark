@@ -158,13 +158,7 @@ class BuildProcessExecutor:
         """Terminates all running processes within the executor, usually in response to error."""
         self.subcommands.clear()
         if self.tee is not None:
-            sys.stdout.buffer.write(b"Hello? Is anybody home?\nI would like some candies please!\n")
-            sys.stdout.buffer.flush()
-            sys.stdout.buffer.write(b"If you won't up then...\n")
-            sys.stdout.buffer.flush()
             sys.stdout.buffer.write(tee.EOF)
-            sys.stdout.buffer.flush()
-            sys.stdout.buffer.write(b"Come on...\n")
             sys.stdout.buffer.flush()
             self.tee.wait()
         for pid, process in self.processes.items():
